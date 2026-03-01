@@ -1,0 +1,43 @@
+Senior Software Engineer — Backend
+Acme Technologies | San Francisco, CA (Hybrid)
+
+About Acme Technologies
+Acme Technologies is a fast-growing SaaS company building the next generation of supply chain management tools. Our platform helps Fortune 500 companies optimize logistics, reduce waste, and improve delivery speed. We're backed by top-tier investors and are scaling from 50 to 150 engineers this year.
+
+About the Role
+We're looking for a Senior Software Engineer to join our Backend Platform team. You'll design and build the core APIs and services that power our supply chain optimization engine. You'll work closely with data scientists, frontend engineers, and product managers to ship features that impact millions of shipments daily.
+
+What You'll Do
+- Design, build, and maintain high-throughput backend services using Python and Go
+- Own the architecture of our event-driven microservices platform
+- Build and optimize RESTful and GraphQL APIs serving 10M+ requests per day
+- Lead technical design reviews and mentor junior engineers
+- Improve system reliability — target 99.95% uptime SLA
+- Collaborate with data science team to integrate ML models into production pipelines
+- Drive best practices in testing, code review, and documentation
+
+What We're Looking For
+- 5+ years of professional software engineering experience
+- Strong proficiency in Python; experience with Go is a plus
+- Experience designing and operating microservices at scale
+- Deep understanding of SQL and NoSQL databases (PostgreSQL, Redis, DynamoDB)
+- Hands-on experience with AWS services (ECS, Lambda, SQS, SNS, RDS)
+- Familiarity with event-driven architectures (Kafka, RabbitMQ, or similar)
+- Experience with containerization and orchestration (Docker, Kubernetes)
+- Strong communication skills and ability to work cross-functionally
+- BS/MS in Computer Science or equivalent practical experience
+
+Nice to Have
+- Experience with GraphQL
+- Knowledge of supply chain or logistics domain
+- Contributions to open-source projects
+- Experience with Terraform or infrastructure-as-code
+- Familiarity with observability tools (Datadog, Prometheus, Grafana)
+
+Benefits
+- Competitive salary: $180,000 - $220,000
+- Equity package
+- Health, dental, and vision insurance
+- Unlimited PTO
+- $2,000 annual learning budget
+- Hybrid work (3 days in office)

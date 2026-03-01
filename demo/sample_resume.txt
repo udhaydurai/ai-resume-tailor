@@ -1,0 +1,43 @@
+John Doe
+john.doe@email.com | (555) 123-4567 | linkedin.com/in/johndoe | San Francisco, CA
+
+PROFESSIONAL SUMMARY
+Software engineer with 5 years of experience building web applications and cloud services. Proficient in Python, JavaScript, and AWS. Passionate about building scalable systems and improving developer productivity.
+
+EXPERIENCE
+
+Software Engineer — TechStart Inc.
+June 2021 - Present
+- Built and maintained RESTful APIs serving 50,000+ daily active users using Python and Flask
+- Migrated legacy monolith to microservices architecture, reducing deployment time by 60%
+- Implemented CI/CD pipelines using GitHub Actions, improving release frequency from monthly to weekly
+- Collaborated with product and design teams to deliver 12 features over 3 quarters
+- Mentored 2 junior developers through code reviews and pair programming sessions
+
+Junior Software Engineer — DataFlow Solutions
+July 2019 - May 2021
+- Developed internal dashboard using React and Node.js for monitoring data pipelines
+- Wrote Python scripts to automate data validation, saving 10 hours per week of manual work
+- Participated in on-call rotation, resolving production incidents with average response time under 15 minutes
+- Contributed to database optimization efforts, improving query performance by 35%
+
+Software Engineering Intern — CloudBase Corp
+May 2018 - August 2018
+- Built a prototype inventory management tool using Django and PostgreSQL
+- Wrote unit tests achieving 85% code coverage for the authentication module
+- Presented project demo to engineering leadership team
+
+SKILLS
+Languages: Python, JavaScript, TypeScript, SQL, Bash
+Frameworks: Flask, Django, React, Node.js, Express
+Cloud & DevOps: AWS (EC2, S3, Lambda, RDS), Docker, GitHub Actions, Terraform
+Databases: PostgreSQL, MySQL, Redis, MongoDB
+Tools: Git, Jira, Confluence, Postman, VS Code
+
+EDUCATION
+Bachelor of Science in Computer Science
+University of California, Berkeley — May 2019
+GPA: 3.6/4.0
+
+CERTIFICATIONS
+AWS Certified Cloud Practitioner — 2022
