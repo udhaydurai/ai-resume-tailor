@@ -268,7 +268,11 @@ with tab_analysis:
                                     "Requirement": r.get("requirement", ""),
                                     "Weight": r["weight"],
                                     "Status": r["status"],
-                                    "Evidence": r.get("evidence", ""),
+                                    "Evidence": r.get("evidence", "")
+                                    if r.get("evidence_found")
+                                    else "(not found in resume)"
+                                    if r.get("evidence")
+                                    else "",
                                 }
                                 for r in fs.get("requirements", [])
                             ],

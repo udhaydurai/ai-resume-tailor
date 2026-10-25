@@ -16,4 +16,4 @@ One slice per branch (`slice/<id>-<name>`). Spec in `docs/slices/<id>.md` first.
 - [ ] 1.5 Hosted mode: one tracker per user, or turn the tracker off when hosted
 - [ ] 1.6 Prompt-injection hardening for fetched job pages (wrap as data, strip instructions, test with hostile pages)
 - [ ] 1.7 Keep edits: tailoring again shouldn't throw away the user's edits without asking
-- [ ] 1.8 Weighted fit score: every requirement tagged core, required or preferred; score computed in code so it repeats; impression line
+- [x] 1.8 Weighted fit score: every requirement tagged core, required or preferred; score computed in code from verified evidence; impression line

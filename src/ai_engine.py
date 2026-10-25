@@ -187,10 +187,38 @@ def _usable(requirements: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def fit_score_from(requirements: Any) -> int:
-    """Score 0-100 from weighted requirements, computed in code so it is repeatable.
+DOWNGRADE = {"met": "partial", "partial": "missing", "missing": "missing"}
 
-    The model only classifies each requirement; the arithmetic never varies between runs.
+
+def _normalise(text: str) -> str:
+    return " ".join(re.sub(r"[^\w%+#./-]+", " ", text.lower()).split())
+
+
+def verify_evidence(rows: list[dict[str, Any]], resume_text: str) -> list[dict[str, Any]]:
+    """A requirement only earns credit for evidence that is really in the resume.
+
+    Met or partial rows whose quote is empty or not found are lowered one step and
+    marked, so an invented quote can't raise the score.
+    """
+    resume = _normalise(resume_text)
+    checked = []
+    for row in rows:
+        quote = _normalise(str(row.get("evidence", "")))
+        found = bool(quote) and quote in resume
+        if row["status"] != "missing" and not found:
+            row = {**row, "status": DOWNGRADE[row["status"]], "evidence_found": False}
+        else:
+            row = {**row, "evidence_found": found}
+        checked.append(row)
+    return checked
+
+
+def fit_score_from(requirements: Any) -> int:
+    """Score 0-100 from weighted requirements.
+
+    The model only classifies each requirement and the arithmetic here is fixed, so the
+    score moves only when the classification does. That is far steadier than a number
+    the model picks, but a borderline requirement can still flip between runs.
     """
     rows = _usable(requirements)
     possible = sum(FIT_WEIGHTS[r["weight"]] for r in rows)
@@ -216,8 +244,10 @@ Split compound items into separate requirements. Each item is an object with:
   - "requirement": short name of the requirement
   - "weight": "core" (the role is defined by it), "required", or "preferred"
   - "status": "met", "partial", or "missing", judged only from what the resume shows
-  - "evidence": the resume phrase that supports it, or "" if missing
-- "explanation": 2-3 sentences explaining the overall fit
+  - "evidence": a phrase copied word for word from the resume that supports it, \
+or "" if missing
+- "explanation": 2-3 sentences explaining the overall fit. Do not give a numeric score \
+or percentage; the app computes the score from the requirements
 - "impression": 2-3 sentences on how a hiring manager for this role would read the \
 resume as a whole: what kind of candidate it makes the person look like
 - "strengths": list of matching strengths (list of strings, max 5)
@@ -232,7 +262,7 @@ Resume:
     result = _parse_json(_call_model(system, prompt))
     if "error" in result:
         return result
-    rows = _usable(result.get("requirements"))
+    rows = verify_evidence(_usable(result.get("requirements")), resume_text)
     if not rows:
         return {"error": "Couldn't read the requirements from the reply. Please try again."}
     order = list(FIT_WEIGHTS)

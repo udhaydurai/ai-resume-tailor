@@ -66,8 +66,13 @@ def test_analyze_job_description(mock_client):
     assert "Python" in result["skills"]
 
 
-def _req(name: str, weight: str, status: str) -> dict[str, str]:
-    return {"requirement": name, "weight": weight, "status": status, "evidence": ""}
+def _req(name: str, weight: str, status: str, evidence: str | None = None) -> dict[str, str]:
+    """A requirement row; by default its evidence is its own name, quoted from RESUME."""
+    quote = name if evidence is None else evidence
+    return {"requirement": name, "weight": weight, "status": status, "evidence": quote}
+
+
+RESUME = "a b graph lake core0 core1 ok"
 
 
 class TestFitScoreFrom:
@@ -104,7 +109,7 @@ class TestScoreFit:
             "requirements": [_req("a", "core", "met"), _req("b", "core", "missing")],
         }
         _create(mock_client).return_value = _mock_response(json.dumps(reply))
-        assert score_fit("Job", "Resume")["score"] == 50
+        assert score_fit("Job", RESUME)["score"] == 50
 
     @patch("src.ai_engine._client")
     def test_every_gap_listed_core_first(self, mock_client):
@@ -114,7 +119,7 @@ class TestScoreFit:
             _req("ok", "core", "met")
         ]
         _create(mock_client).return_value = _mock_response(json.dumps({"requirements": reqs}))
-        gaps = score_fit("Job", "Resume")["gaps"]
+        gaps = score_fit("Job", RESUME)["gaps"]
         assert len(gaps) == 8
         assert [g.split("]")[0] for g in gaps[:3]] == [
             "[core, missing",
@@ -145,6 +150,8 @@ class TestScoreFit:
         prompt = kwargs["messages"][0]["content"]
         for word in ("core", "required", "preferred", "met", "partial", "missing", "impression"):
             assert word in prompt
+        assert "word for word" in prompt
+        assert "Do not give a numeric score" in prompt
         assert "max 5" not in prompt.split('"explanation"')[0]
         assert "THE JOB" not in kwargs["system"] and "THE RESUME" not in kwargs["system"]
 
@@ -215,3 +222,38 @@ def test_generators_forbid_invented_facts(mock_client, generate):
     kwargs = _create(mock_client).call_args.kwargs
     assert ai_engine.TRUTHFULNESS_RULE in kwargs["system"]
     assert "Pat Example" in kwargs["messages"][0]["content"]
+
+
+class TestVerifyEvidence:
+    RESUME = "Built data pipelines in Python.\nLed a team of 4 engineers (2021-2024)."
+
+    def _check(self, status: str, evidence: str) -> dict[str, object]:
+        (row,) = ai_engine.verify_evidence([_req("x", "core", status, evidence)], self.RESUME)
+        return row
+
+    def test_quote_found_keeps_status(self):
+        row = self._check("met", "built data pipelines in python")
+        assert row["status"] == "met" and row["evidence_found"] is True
+
+    def test_spacing_case_and_punctuation_are_ignored(self):
+        row = self._check("met", "  Led a team of 4 engineers  (2021-2024) ")
+        assert row["status"] == "met"
+
+    def test_invented_quote_is_lowered_one_step(self):
+        assert self._check("met", "Managed a $5M budget")["status"] == "partial"
+        assert self._check("partial", "Kubernetes in production")["status"] == "missing"
+
+    def test_empty_evidence_cannot_earn_full_credit(self):
+        row = self._check("met", "")
+        assert row["status"] == "partial" and row["evidence_found"] is False
+
+    def test_missing_rows_are_untouched(self):
+        assert self._check("missing", "")["status"] == "missing"
+
+    @patch("src.ai_engine._client")
+    def test_invented_evidence_lowers_the_score(self, mock_client):
+        reply = {"requirements": [_req("Go", "core", "met", "Wrote Go services")]}
+        _create(mock_client).return_value = _mock_response(json.dumps(reply))
+        result = score_fit("Job", self.RESUME)
+        assert result["score"] == 50
+        assert result["gaps"] == ["[core, partial] Go"]
