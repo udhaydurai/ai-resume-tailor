@@ -1,7 +1,5 @@
 """Tests for job tracker module."""
 
-import os
-import tempfile
 from unittest.mock import patch
 
 import pytest
@@ -32,18 +30,14 @@ def test_add_and_get():
 
 
 def test_update_status():
-    app_id = job_tracker.add_application(
-        company="Beta Inc", title="PM"
-    )
+    app_id = job_tracker.add_application(company="Beta Inc", title="PM")
     job_tracker.update_status(app_id, "Interview")
     apps = job_tracker.get_all_applications()
     assert apps[0]["status"] == "Interview"
 
 
 def test_delete():
-    app_id = job_tracker.add_application(
-        company="Gamma LLC", title="Designer"
-    )
+    app_id = job_tracker.add_application(company="Gamma LLC", title="Designer")
     job_tracker.delete_application(app_id)
     apps = job_tracker.get_all_applications()
     assert len(apps) == 0
@@ -59,3 +53,17 @@ def test_export_csv():
 def test_export_csv_empty():
     csv_str = job_tracker.export_csv()
     assert csv_str == ""
+
+
+def test_update_application_changes_only_allowed_fields():
+    app_id = job_tracker.add_application(company="Acme", title="SWE")
+    job_tracker.update_application(app_id, notes="called back", id="999", bogus="x")
+    (app,) = job_tracker.get_all_applications()
+    assert app["notes"] == "called back"
+    assert app["id"] == app_id
+
+
+def test_update_application_with_nothing_allowed_is_a_no_op():
+    app_id = job_tracker.add_application(company="Acme", title="SWE")
+    job_tracker.update_application(app_id, bogus="x")
+    assert job_tracker.get_all_applications()[0]["company"] == "Acme"

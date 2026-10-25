@@ -4,12 +4,21 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+from typing import Protocol
 
 from docx import Document
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 
 
-def parse_resume(uploaded_file) -> str:
+class Upload(Protocol):
+    name: str
+
+    def read(self) -> bytes: ...
+
+    def seek(self, pos: int, /) -> int | None: ...
+
+
+def parse_resume(uploaded_file: Upload) -> str:
     """Extract text from an uploaded resume file.
 
     Args:

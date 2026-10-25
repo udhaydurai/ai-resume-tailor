@@ -5,11 +5,11 @@ from __future__ import annotations
 import io
 
 from docx import Document
-from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches, Pt
 
 
-def generate_cover_letter_docx(cover_letter_text: str, user_profile: dict) -> bytes:
+def generate_cover_letter_docx(cover_letter_text: str, user_profile: dict[str, str]) -> bytes:
     """Convert a plain-text cover letter into a .docx file.
 
     Returns the file content as bytes.

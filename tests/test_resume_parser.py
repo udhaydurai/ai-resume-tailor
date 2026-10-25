@@ -1,7 +1,6 @@
 """Tests for resume parser module."""
 
 import io
-from unittest.mock import MagicMock
 
 import pytest
 from docx import Document
@@ -51,7 +50,7 @@ def test_parse_unsupported():
 
 def test_parse_pdf():
     """Smoke test: an empty-ish PDF should not crash."""
-    from PyPDF2 import PdfWriter
+    from pypdf import PdfWriter
 
     writer = PdfWriter()
     writer.add_blank_page(width=612, height=792)

@@ -1,0 +1,11 @@
+.env
+.env.*
+.git
+.venv
+private
+tests
+evals
+docs
+.claude
+*.sqlite*
+*.db*

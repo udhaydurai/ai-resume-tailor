@@ -1,19 +1,26 @@
 """AI Resume Tailor — Streamlit application."""
 
+import os
+from collections.abc import Callable
+from datetime import date
+from typing import Any
+
+import anthropic
 import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.ai_engine import (
+from src.ai_engine import (  # noqa: E402
+    AIError,
     analyze_job_description,
     generate_cover_letter,
     generate_tailored_resume,
     keyword_match_report,
     score_fit,
 )
-from src.cover_letter import generate_cover_letter_docx
-from src.job_tracker import (
+from src.cover_letter import generate_cover_letter_docx  # noqa: E402
+from src.job_tracker import (  # noqa: E402
     STATUSES,
     add_application,
     delete_application,
@@ -22,9 +29,40 @@ from src.job_tracker import (
     init_db,
     update_status,
 )
-from src.resume_generator import generate_docx, generate_pdf
-from src.resume_parser import parse_resume
-from src.utils import fetch_job_description
+from src.resume_generator import generate_docx, generate_pdf  # noqa: E402
+from src.resume_parser import parse_resume  # noqa: E402
+from src.truthcheck import unsupported_numbers  # noqa: E402
+from src.utils import fetch_job_description  # noqa: E402
+
+
+def run_ai(fn: Callable[..., Any], *args: Any) -> Any:
+    """Call Claude and show a plain error instead of a stack trace."""
+    try:
+        return fn(*args)
+    except AIError as exc:
+        st.error(str(exc))
+    except anthropic.AuthenticationError:
+        st.error("Your Anthropic API key was rejected. Check ANTHROPIC_API_KEY in your .env file.")
+    except anthropic.RateLimitError:
+        st.error("Claude is rate-limiting this key. Wait a minute and try again.")
+    except anthropic.APIConnectionError:
+        st.error("Could not reach Claude. Check your internet connection.")
+    except anthropic.APIStatusError as exc:
+        st.error(f"Claude returned an error ({exc.status_code}). Please try again.")
+    return None
+
+
+def warn_unsupported(original: str, generated: str, profile: dict[str, str]) -> None:
+    """Point out numbers Claude may have invented, before the user sends anything."""
+    today = date.today().strftime("%B %d %Y %m/%d/%Y")
+    known = " ".join([original, today, *profile.values()])
+    invented = unsupported_numbers(known, generated)
+    if invented:
+        st.warning(
+            "Check these numbers before you send. They are not in your original resume: "
+            + ", ".join(invented)
+        )
+
 
 # ---------------------------------------------------------------------------
 # Page configuration
@@ -62,6 +100,11 @@ st.sidebar.caption("Built with Claude API & Streamlit")
 # ---------------------------------------------------------------------------
 
 st.title("📄 AI Resume Tailor")
+if not os.environ.get("ANTHROPIC_API_KEY"):
+    st.warning(
+        "No ANTHROPIC_API_KEY found. Copy .env.example to .env and add your key, "
+        "then restart the app. Analysis and generation will not work until then."
+    )
 st.caption("Tailor your resume and cover letter for any job — powered by Claude AI")
 
 tab_input, tab_analysis, tab_resume, tab_cover, tab_tracker = st.tabs(
@@ -102,7 +145,12 @@ with tab_input:
 
         if "job_desc_fetched" in st.session_state:
             job_desc = st.session_state["job_desc_fetched"]
-            st.text_area("Fetched job description (editable)", value=job_desc, height=300, key="fetched_jd_display")
+            st.text_area(
+                "Fetched job description (editable)",
+                value=job_desc,
+                height=300,
+                key="fetched_jd_display",
+            )
 
     st.divider()
 
@@ -146,8 +194,9 @@ with tab_analysis:
         # --- Job Description Analysis ---
         if st.button("Analyze Job Description", key="btn_analyze_jd"):
             with st.spinner("Analyzing job description with Claude..."):
-                analysis = analyze_job_description(jd)
-                st.session_state["jd_analysis"] = analysis
+                analysis = run_ai(analyze_job_description, jd)
+                if analysis is not None:
+                    st.session_state["jd_analysis"] = analysis
 
         if "jd_analysis" in st.session_state:
             a = st.session_state["jd_analysis"]
@@ -182,8 +231,9 @@ with tab_analysis:
         else:
             if st.button("Score Resume Fit", key="btn_score"):
                 with st.spinner("Scoring alignment with Claude..."):
-                    result = score_fit(jd, rt)
-                    st.session_state["fit_score"] = result
+                    result = run_ai(score_fit, jd, rt)
+                    if result is not None:
+                        st.session_state["fit_score"] = result
 
             if "fit_score" in st.session_state:
                 fs = st.session_state["fit_score"]
@@ -212,8 +262,9 @@ with tab_analysis:
             # --- Keyword Report ---
             if st.button("Keyword Match Report", key="btn_keywords"):
                 with st.spinner("Generating keyword report..."):
-                    report = keyword_match_report(jd, rt)
-                    st.session_state["keyword_report"] = report
+                    report = run_ai(keyword_match_report, jd, rt)
+                    if report is not None:
+                        st.session_state["keyword_report"] = report
 
             if "keyword_report" in st.session_state:
                 kr = st.session_state["keyword_report"]
@@ -250,12 +301,16 @@ with tab_resume:
             if not user_name:
                 st.warning("Fill in your profile in the sidebar for best results.")
             with st.spinner("Generating tailored resume with Claude... this may take a moment."):
-                tailored = generate_tailored_resume(jd, rt, user_profile)
-                st.session_state["tailored_resume"] = tailored
+                tailored = run_ai(generate_tailored_resume, jd, rt, user_profile)
+                if tailored is not None:
+                    st.session_state["tailored_resume"] = tailored
 
         if "tailored_resume" in st.session_state:
             tailored = st.session_state["tailored_resume"]
-            st.text_area("Tailored Resume (editable)", value=tailored, height=500, key="resume_edit")
+            warn_unsupported(rt, tailored, user_profile)
+            st.text_area(
+                "Tailored Resume (editable)", value=tailored, height=500, key="resume_edit"
+            )
 
             # Use the edited version for downloads
             final_resume = st.session_state.get("resume_edit", tailored)
@@ -294,11 +349,13 @@ with tab_cover:
             if not user_name:
                 st.warning("Fill in your profile in the sidebar for best results.")
             with st.spinner("Generating cover letter with Claude..."):
-                cl = generate_cover_letter(jd, rt, user_profile)
-                st.session_state["cover_letter"] = cl
+                cl = run_ai(generate_cover_letter, jd, rt, user_profile)
+                if cl is not None:
+                    st.session_state["cover_letter"] = cl
 
         if "cover_letter" in st.session_state:
             cl = st.session_state["cover_letter"]
+            warn_unsupported(rt, cl, user_profile)
             st.text_area("Cover Letter (editable)", value=cl, height=400, key="cover_edit")
 
             final_cl = st.session_state.get("cover_edit", cl)
@@ -320,32 +377,31 @@ with tab_tracker:
     init_db()
 
     # --- Add new application ---
-    with st.expander("➕ Add New Application", expanded=False):
-        with st.form("add_app_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                new_company = st.text_input("Company")
-                new_title = st.text_input("Job Title")
-                new_status = st.selectbox("Status", STATUSES)
-            with col2:
-                new_url = st.text_input("Job URL")
-                new_date = st.date_input("Applied Date")
-                new_notes = st.text_area("Notes", height=80)
+    with st.expander("➕ Add New Application", expanded=False), st.form("add_app_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            new_company = st.text_input("Company")
+            new_title = st.text_input("Job Title")
+            new_status = st.selectbox("Status", STATUSES)
+        with col2:
+            new_url = st.text_input("Job URL")
+            new_date = st.date_input("Applied Date")
+            new_notes = st.text_area("Notes", height=80)
 
-            if st.form_submit_button("Add Application"):
-                if new_company and new_title:
-                    add_application(
-                        company=new_company,
-                        title=new_title,
-                        status=new_status,
-                        url=new_url,
-                        notes=new_notes,
-                        applied_date=str(new_date),
-                    )
-                    st.success(f"Added {new_title} at {new_company}")
-                    st.rerun()
-                else:
-                    st.warning("Company and Job Title are required.")
+        if st.form_submit_button("Add Application"):
+            if new_company and new_title:
+                add_application(
+                    company=new_company,
+                    title=new_title,
+                    status=new_status,
+                    url=new_url,
+                    notes=new_notes,
+                    applied_date=str(new_date),
+                )
+                st.success(f"Added {new_title} at {new_company}")
+                st.rerun()
+            else:
+                st.warning("Company and Job Title are required.")
 
     # --- Display applications ---
     apps = get_all_applications()
