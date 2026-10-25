@@ -1,12 +1,13 @@
 """Tests for utility functions."""
 
+import json
 import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
-from src.utils import MAX_BYTES, check_public_url, fetch_job_description
+from src.utils import MAX_BYTES, check_public_url, fetch_job_description, workday_api_url
 
 PUBLIC = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
 
@@ -19,6 +20,9 @@ HTML = b"""
         <h1>Software Engineer</h1>
         <p>We are looking for a talented engineer.</p>
         <p>Requirements: Python, AWS, Docker</p>
+        <p>You will design, build and operate backend services, mentor engineers,
+        review designs, and work with product managers to ship features that customers
+        rely on every day. Five or more years of experience building web services.</p>
     </div>
     <footer>Footer stuff</footer>
 </body>
@@ -118,3 +122,57 @@ def test_oversized_page_is_rejected(mock_get, public_dns):
     mock_get.return_value = _resp(body=b"x" * (MAX_BYTES + 10))
     with pytest.raises(ValueError, match="too large"):
         fetch_job_description("https://example.com/huge")
+
+
+WORKDAY = "https://acme.wd5.myworkdayjobs.com/Careers/job/Remote-USA/Data-Lead_JR1?source=LinkedIn"
+
+
+@pytest.mark.parametrize(
+    ("url", "api"),
+    [
+        (
+            WORKDAY,
+            "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/job/Remote-USA/Data-Lead_JR1",
+        ),
+        (
+            "https://acme.wd1.myworkdayjobs.com/en-US/Ext/job/Data-Lead_JR2",
+            "https://acme.wd1.myworkdayjobs.com/wday/cxs/acme/Ext/job/Data-Lead_JR2",
+        ),
+        ("https://acme.wd5.myworkdayjobs.com/Careers", None),
+        ("https://example.com/Careers/job/x", None),
+        ("https://myworkdayjobs.com.evil.example/Careers/job/x", None),
+    ],
+)
+def test_workday_api_url(url, api):
+    assert workday_api_url(url) == api
+
+
+@patch("src.utils.requests.get")
+def test_workday_postings_use_the_json_endpoint(mock_get, public_dns):
+    payload = {
+        "jobPostingInfo": {
+            "title": "Data Lead",
+            "jobDescription": "<p>" + "Own the data platform and lead the team. " * 10 + "</p>",
+        }
+    }
+    mock_get.return_value = _resp(body=json.dumps(payload).encode())
+    text = fetch_job_description(WORKDAY)
+    assert text.startswith("Data Lead\nOwn the data platform")
+    assert "/wday/cxs/acme/Careers/job/" in mock_get.call_args.args[0]
+    assert mock_get.call_args.kwargs["headers"]["Accept"] == "application/json"
+
+
+@patch("src.utils.requests.get")
+def test_unexpected_workday_reply_is_a_plain_error(mock_get, public_dns):
+    mock_get.return_value = _resp(body=b'{"something": "else"}')
+    with pytest.raises(ValueError, match="does not understand"):
+        fetch_job_description(WORKDAY)
+
+
+@patch("src.utils.requests.get")
+def test_javascript_only_page_says_paste_instead(mock_get, public_dns):
+    mock_get.return_value = _resp(
+        body=b"<html><body><div id='root'></div><script>app()</script></body></html>"
+    )
+    with pytest.raises(ValueError, match="Paste text"):
+        fetch_job_description("https://example.com/job")
