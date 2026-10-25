@@ -10,6 +10,7 @@ from src.ai_engine import (
     AIError,
     _parse_json,
     analyze_job_description,
+    fit_score_from,
     generate_cover_letter,
     generate_tailored_resume,
     keyword_match_report,
@@ -65,10 +66,87 @@ def test_analyze_job_description(mock_client):
     assert "Python" in result["skills"]
 
 
-@patch("src.ai_engine._client")
-def test_score_fit(mock_client):
-    _create(mock_client).return_value = _mock_response(json.dumps({"score": 75}))
-    assert score_fit("Job desc here", "Resume text here")["score"] == 75
+def _req(name: str, weight: str, status: str) -> dict[str, str]:
+    return {"requirement": name, "weight": weight, "status": status, "evidence": ""}
+
+
+class TestFitScoreFrom:
+    def test_weights_and_credit(self):
+        reqs = [
+            _req("a", "core", "met"),
+            _req("b", "required", "partial"),
+            _req("c", "preferred", "missing"),
+        ]
+        # earned 3 + 1 + 0 = 4 of 6 possible
+        assert fit_score_from(reqs) == 67
+
+    def test_all_met_is_100(self):
+        assert fit_score_from([_req("a", "core", "met"), _req("b", "preferred", "met")]) == 100
+
+    def test_unknown_rows_are_left_out(self):
+        reqs = [_req("a", "core", "met"), _req("b", "nice", "missing"), _req("c", "core", "maybe")]
+        assert fit_score_from(reqs) == 100
+
+    def test_case_and_whitespace_are_tolerated(self):
+        assert fit_score_from([_req("a", " Core ", "MISSING"), _req("b", "core", "met")]) == 50
+
+    def test_nothing_usable_is_zero(self):
+        assert fit_score_from([]) == 0
+        assert fit_score_from("not a list") == 0
+        assert fit_score_from(["not a row", _req("a", "core", "met")]) == 100
+
+
+class TestScoreFit:
+    @patch("src.ai_engine._client")
+    def test_model_score_is_ignored(self, mock_client):
+        reply = {
+            "score": 99,
+            "requirements": [_req("a", "core", "met"), _req("b", "core", "missing")],
+        }
+        _create(mock_client).return_value = _mock_response(json.dumps(reply))
+        assert score_fit("Job", "Resume")["score"] == 50
+
+    @patch("src.ai_engine._client")
+    def test_every_gap_listed_core_first(self, mock_client):
+        reqs = [_req(f"pref{i}", "preferred", "missing") for i in range(4)]
+        reqs += [_req("graph", "core", "missing"), _req("lake", "required", "partial")]
+        reqs += [_req(f"core{i}", "core", "partial") for i in range(2)] + [
+            _req("ok", "core", "met")
+        ]
+        _create(mock_client).return_value = _mock_response(json.dumps({"requirements": reqs}))
+        gaps = score_fit("Job", "Resume")["gaps"]
+        assert len(gaps) == 8
+        assert [g.split("]")[0] for g in gaps[:3]] == [
+            "[core, missing",
+            "[core, partial",
+            "[core, partial",
+        ]
+        assert gaps[3].startswith("[required, partial] lake")
+        assert all(g.startswith("[preferred") for g in gaps[4:])
+        assert not any("ok" in g for g in gaps)
+
+    @patch("src.ai_engine._client")
+    def test_no_requirements_is_an_error(self, mock_client):
+        _create(mock_client).return_value = _mock_response(json.dumps({"score": 75}))
+        assert "error" in score_fit("Job", "Resume")
+
+    @patch("src.ai_engine._client")
+    def test_unparseable_reply_is_an_error(self, mock_client):
+        _create(mock_client).return_value = _mock_response("not json")
+        assert "error" in score_fit("Job", "Resume")
+
+    @patch("src.ai_engine._client")
+    def test_prompt_asks_for_every_requirement_weighted(self, mock_client):
+        _create(mock_client).return_value = _mock_response(
+            json.dumps({"requirements": [_req("a", "core", "met")]})
+        )
+        score_fit("THE JOB", "THE RESUME")
+        kwargs = _create(mock_client).call_args.kwargs
+        prompt = kwargs["messages"][0]["content"]
+        for word in ("core", "required", "preferred", "met", "partial", "missing", "impression"):
+            assert word in prompt
+        assert "max 5" not in prompt.split('"explanation"')[0]
+        assert "THE JOB" not in kwargs["system"] and "THE RESUME" not in kwargs["system"]
 
 
 @patch("src.ai_engine._client")

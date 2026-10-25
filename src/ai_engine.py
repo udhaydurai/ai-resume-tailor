@@ -164,20 +164,63 @@ Job Description:
 # ---------------------------------------------------------------------------
 
 
+FIT_WEIGHTS = {"core": 3, "required": 2, "preferred": 1}
+FIT_CREDIT = {"met": 1.0, "partial": 0.5, "missing": 0.0}
+
+
+def _tier(row: dict[str, Any], key: str, allowed: dict[str, Any]) -> str | None:
+    value = str(row.get(key, "")).strip().lower()
+    return value if value in allowed else None
+
+
+def _usable(requirements: Any) -> list[dict[str, Any]]:
+    """Rows with a known weight and status; everything else is left out."""
+    if not isinstance(requirements, list):
+        return []
+    rows = []
+    for row in requirements:
+        if not isinstance(row, dict):
+            continue
+        weight, status = _tier(row, "weight", FIT_WEIGHTS), _tier(row, "status", FIT_CREDIT)
+        if weight and status:
+            rows.append({**row, "weight": weight, "status": status})
+    return rows
+
+
+def fit_score_from(requirements: Any) -> int:
+    """Score 0-100 from weighted requirements, computed in code so it is repeatable.
+
+    The model only classifies each requirement; the arithmetic never varies between runs.
+    """
+    rows = _usable(requirements)
+    possible = sum(FIT_WEIGHTS[r["weight"]] for r in rows)
+    if not possible:
+        return 0
+    earned = sum(FIT_WEIGHTS[r["weight"]] * FIT_CREDIT[r["status"]] for r in rows)
+    return int(earned * 100 / possible + 0.5)
+
+
 def score_fit(job_description: str, resume_text: str) -> dict[str, Any]:
     """Score how well a resume matches a job description (0-100).
 
-    Returns a dict with keys: score, explanation, strengths,
-    gaps, and suggestions.
+    The model lists every requirement with a weight, status and evidence; the score and
+    the gap list are derived here. Returns score, explanation, impression, strengths,
+    gaps, suggestions and requirements.
     """
     system = (
         "You are a career advisor and ATS expert. Respond ONLY with valid JSON, no markdown fences."
     )
     prompt = f"""Compare the resume against the job description and return JSON with:
-- "score": integer 0-100 representing alignment
-- "explanation": 2-3 sentences explaining the score
+- "requirements": EVERY requirement in the job description, with no limit on how many. \
+Split compound items into separate requirements. Each item is an object with:
+  - "requirement": short name of the requirement
+  - "weight": "core" (the role is defined by it), "required", or "preferred"
+  - "status": "met", "partial", or "missing", judged only from what the resume shows
+  - "evidence": the resume phrase that supports it, or "" if missing
+- "explanation": 2-3 sentences explaining the overall fit
+- "impression": 2-3 sentences on how a hiring manager for this role would read the \
+resume as a whole: what kind of candidate it makes the person look like
 - "strengths": list of matching strengths (list of strings, max 5)
-- "gaps": list of gaps or missing qualifications (list of strings, max 5)
 - "suggestions": list of actionable suggestions to improve fit (list of strings, max 5)
 
 Job Description:
@@ -186,8 +229,25 @@ Job Description:
 Resume:
 {resume_text}"""
 
-    text = _call_model(system, prompt)
-    return _parse_json(text)
+    result = _parse_json(_call_model(system, prompt))
+    if "error" in result:
+        return result
+    rows = _usable(result.get("requirements"))
+    if not rows:
+        return {"error": "Couldn't read the requirements from the reply. Please try again."}
+    order = list(FIT_WEIGHTS)
+    gaps = sorted(
+        (r for r in rows if r["status"] != "met"),
+        key=lambda r: (order.index(r["weight"]), r["status"] != "missing"),
+    )
+    return {
+        **result,
+        "requirements": rows,
+        "score": fit_score_from(rows),
+        "gaps": [
+            f"[{r['weight']}, {r['status']}] {r.get('requirement', '')}".rstrip() for r in gaps
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------
