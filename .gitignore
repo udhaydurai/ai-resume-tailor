@@ -7,3 +7,16 @@ venv/
 dist/
 *.egg-info/
 .pytest_cache/
+*.sqlite
+*.sqlite3
+*.db-*
+.env.*
+!.env.example
+private/
+.review/
+.claude/settings.local.json
+.claude/privacy.local.json
+.coverage
+.mypy_cache/
+.ruff_cache/
+.DS_Store

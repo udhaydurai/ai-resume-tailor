@@ -43,6 +43,7 @@ ignore = ["S101"]
 "tests/**" = ["S", "B", "E501"]
 "app.py" = ["E501"]
 "src/ai_engine.py" = ["E501"]  # prompt text reads better unwrapped
+"scripts/**" = ["S603", "S607"]  # runs git from PATH on purpose
 
 [tool.mypy]
 strict = true
