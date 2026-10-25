@@ -45,7 +45,8 @@ def score(case: dict[str, Any]) -> list[tuple[str, str, list[str]]]:
 def main() -> int:
     load_dotenv()
     cases = json.loads(CASES.read_text())
-    print(f"model={ai_engine.model()} effort={ai_engine.effort()} cases={len(cases)}\n")
+    settings = f"provider={ai_engine.provider()} model={ai_engine.model()}"
+    print(f"{settings} effort={ai_engine.effort()} cases={len(cases)}\n")
     print("| case | output | invented |")
     print("|---|---|---|")
     total = 0

@@ -6,10 +6,10 @@ Your resume, your job tracker and your API key are yours. This page says where t
 
 | Data | Where it lives | Leaves your machine? |
 |---|---|---|
-| Uploaded resume | In memory while the app runs | Sent to Anthropic's API with each request |
-| Job description | In memory while the app runs | Sent to Anthropic's API |
+| Uploaded resume | In memory while the app runs | Sent to your AI provider with each request (Anthropic by default; nowhere with a local model) |
+| Job description | In memory while the app runs | Sent to your AI provider |
 | Job tracker | `job_tracker` database file in the repo folder (git-ignored) | No |
-| API key | `.env` (git-ignored) | Only to Anthropic |
+| API key | `.env` (git-ignored) | Only to that provider |
 
 The tracker is one file for whoever runs the app. Don't host this app for other people as it is: everyone would share one tracker. (Roadmap slice 1.5.)
 

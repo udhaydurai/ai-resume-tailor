@@ -1,4 +1,9 @@
-"""AI analysis engine powered by Claude API."""
+"""AI analysis engine. Claude by default; any OpenAI-compatible API as an untested option.
+
+Tested with Claude only. Other providers go through the OpenAI chat-completions format,
+which OpenAI, Gemini, Ollama, OpenRouter and many others accept. Prompts are tuned for
+Claude, so another model may need prompt changes: fork and adapt this file.
+"""
 
 from __future__ import annotations
 
@@ -8,8 +13,11 @@ import re
 from typing import Any, Literal
 
 import anthropic
+import requests
 
+PROVIDERS = ("anthropic", "openai")
 DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_BASE_URL = "https://api.openai.com/v1"
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 EFFORTS: tuple[Effort, ...] = ("low", "medium", "high", "xhigh", "max")
 DEFAULT_EFFORT: Effort = "medium"
@@ -22,15 +30,21 @@ TRUTHFULNESS_RULE = (
 
 
 class AIError(RuntimeError):
-    """Claude could not produce an answer (refusal, empty reply)."""
+    """The model could not produce an answer (refusal, empty reply, provider error)."""
 
 
 def _client() -> anthropic.Anthropic:
     return anthropic.Anthropic()
 
 
+def provider() -> str:
+    value = os.environ.get("RESUME_TAILOR_PROVIDER", "anthropic").strip().lower()
+    return value if value in PROVIDERS else "anthropic"
+
+
 def model() -> str:
-    return os.environ.get("RESUME_TAILOR_MODEL", DEFAULT_MODEL)
+    default = DEFAULT_MODEL if provider() == "anthropic" else ""
+    return os.environ.get("RESUME_TAILOR_MODEL", default)
 
 
 def effort() -> Effort:
@@ -38,8 +52,31 @@ def effort() -> Effort:
     return next((e for e in EFFORTS if e == value), DEFAULT_EFFORT)
 
 
-def _call_claude(system: str, user: str, max_tokens: int = 16000) -> str:
-    """The only place the app calls Claude."""
+def setup_problem() -> str | None:
+    """What is missing before the app can call a model, in plain words."""
+    if provider() == "anthropic":
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            return (
+                "No ANTHROPIC_API_KEY found. Copy .env.example to .env and add your key, "
+                "then restart the app."
+            )
+        return None
+    if not model():
+        return "RESUME_TAILOR_PROVIDER is openai: set RESUME_TAILOR_MODEL to a model it offers."
+    return None
+
+
+def _call_model(system: str, user: str, max_tokens: int = 16000) -> str:
+    """The only place the app calls a model."""
+    if provider() == "openai":
+        problem = setup_problem()
+        if problem:
+            raise AIError(problem)
+        return _call_openai_compatible(system, user)
+    return _call_anthropic(system, user, max_tokens)
+
+
+def _call_anthropic(system: str, user: str, max_tokens: int) -> str:
     response = _client().beta.messages.create(
         model=model(),
         max_tokens=max_tokens,
@@ -54,6 +91,40 @@ def _call_claude(system: str, user: str, max_tokens: int = 16000) -> str:
     text = "".join(block.text for block in response.content if block.type == "text").strip()
     if not text:
         raise AIError("Claude returned an empty reply. Please try again.")
+    return text
+
+
+def _call_openai_compatible(system: str, user: str) -> str:
+    """Untested by the maintainers: any endpoint that speaks OpenAI chat completions."""
+    base_url = os.environ.get("RESUME_TAILOR_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+    key = os.environ.get("RESUME_TAILOR_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    body = {
+        "model": model(),
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+    }
+    try:
+        resp = requests.post(
+            f"{base_url}/chat/completions", json=body, headers=headers, timeout=300
+        )
+    except requests.RequestException as exc:
+        raise AIError(f"Could not reach {base_url}. Check RESUME_TAILOR_BASE_URL.") from exc
+    if resp.status_code in (401, 403):
+        raise AIError("Your API key was rejected. Check RESUME_TAILOR_API_KEY in .env.")
+    if resp.status_code == 429:
+        raise AIError("The provider is rate-limiting this key. Wait a minute and try again.")
+    if not resp.ok:
+        raise AIError(f"The provider returned an error ({resp.status_code}). Please try again.")
+    try:
+        choice = resp.json()["choices"][0]
+        text = str((choice.get("message") or {}).get("content") or "").strip()
+        filtered = choice.get("finish_reason") == "content_filter"
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+        raise AIError("The provider sent a reply this app does not understand.") from exc
+    if filtered:
+        raise AIError("The model declined this request. Try rewording the job description.")
+    if not text:
+        raise AIError("The model returned an empty reply. Please try again.")
     return text
 
 
@@ -84,7 +155,7 @@ def analyze_job_description(job_description: str) -> dict[str, Any]:
 Job Description:
 {job_description}"""
 
-    text = _call_claude(system, prompt)
+    text = _call_model(system, prompt)
     return _parse_json(text)
 
 
@@ -115,7 +186,7 @@ Job Description:
 Resume:
 {resume_text}"""
 
-    text = _call_claude(system, prompt)
+    text = _call_model(system, prompt)
     return _parse_json(text)
 
 
@@ -144,7 +215,7 @@ Job Description:
 Resume:
 {resume_text}"""
 
-    text = _call_claude(system, prompt)
+    text = _call_model(system, prompt)
     return _parse_json(text)
 
 
@@ -190,7 +261,7 @@ Job Description:
 Original Resume:
 {resume_text}"""
 
-    return _call_claude(system, prompt)
+    return _call_model(system, prompt)
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +304,7 @@ Job Description:
 Resume:
 {resume_text}"""
 
-    return _call_claude(system, prompt)
+    return _call_model(system, prompt)
 
 
 # ---------------------------------------------------------------------------
