@@ -24,6 +24,8 @@ def unsupported_numbers(original: str, generated: str) -> list[str]:
 
 def unsupported_terms(original: str, generated: str, terms: list[str]) -> list[str]:
     """Terms (such as skills the job asks for) in `generated` but absent from `original`."""
-    have = original.lower()
-    out = generated.lower()
-    return [t for t in terms if t.lower() in out and t.lower() not in have]
+
+    def mentions(text: str, term: str) -> bool:
+        return re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text, re.IGNORECASE) is not None
+
+    return [t for t in terms if mentions(generated, t) and not mentions(original, t)]

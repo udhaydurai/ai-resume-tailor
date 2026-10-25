@@ -23,3 +23,9 @@ def test_terms_the_job_wants_but_resume_lacks():
     terms = ["Kubernetes", "Python", "Terraform"]
     generated = "Expert in Python and Kubernetes."
     assert unsupported_terms("Python developer", generated, terms) == ["Kubernetes"]
+
+
+def test_terms_match_whole_words_only():
+    generated = "Built trust with a go-to-market team using C++."
+    assert unsupported_terms("", generated, ["Rust", "Go", "C++"]) == ["Go", "C++"]
+    assert unsupported_terms("", "I know dbt.", ["DBT"]) == ["DBT"]

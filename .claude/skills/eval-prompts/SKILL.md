@@ -10,6 +10,6 @@ The eval runs the real generators on synthetic resume and job pairs in `evals/ca
 1. **Baseline.** On `master` (or before your change): `make eval`. Save the table.
 2. **Change.** Make the prompt or setting change.
 3. **Measure.** `make eval` again. To compare models or effort without code changes: `RESUME_TAILOR_MODEL=claude-sonnet-5-5 make eval`, `RESUME_TAILOR_EFFORT=low make eval`.
-4. **Decide.** The change may not add invented facts. A higher count than the baseline is a failed change, even if the text reads better. Run twice if results look noisy; outputs vary between runs.
+4. **Decide.** Read each flagged sentence first: a cover letter may name a missing skill honestly ("the role calls for Tableau, which I'm learning"), and a cover letter may quote numbers from the job posting. Count only real claims. The change may not add invented facts. A higher count than the baseline is a failed change, even if the text reads better. Run twice if results look noisy; outputs vary between runs.
 5. **Record.** Put both tables in the PR.
 6. **New cases.** When a bug shows a new way to invent facts, add a synthetic case to `evals/cases.json` (`@example.test` emails, `555-01xx` phones) that catches it.
