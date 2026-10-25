@@ -10,6 +10,7 @@ from src.ai_engine import (
     AIError,
     _parse_json,
     analyze_job_description,
+    fit_score_from,
     generate_cover_letter,
     generate_tailored_resume,
     keyword_match_report,
@@ -65,10 +66,94 @@ def test_analyze_job_description(mock_client):
     assert "Python" in result["skills"]
 
 
-@patch("src.ai_engine._client")
-def test_score_fit(mock_client):
-    _create(mock_client).return_value = _mock_response(json.dumps({"score": 75}))
-    assert score_fit("Job desc here", "Resume text here")["score"] == 75
+def _req(name: str, weight: str, status: str, evidence: str | None = None) -> dict[str, str]:
+    """A requirement row; by default its evidence is its own name, quoted from RESUME."""
+    quote = name if evidence is None else evidence
+    return {"requirement": name, "weight": weight, "status": status, "evidence": quote}
+
+
+RESUME = "a b graph lake core0 core1 ok"
+
+
+class TestFitScoreFrom:
+    def test_weights_and_credit(self):
+        reqs = [
+            _req("a", "core", "met"),
+            _req("b", "required", "partial"),
+            _req("c", "preferred", "missing"),
+        ]
+        # earned 3 + 1 + 0 = 4 of 6 possible
+        assert fit_score_from(reqs) == 67
+
+    def test_all_met_is_100(self):
+        assert fit_score_from([_req("a", "core", "met"), _req("b", "preferred", "met")]) == 100
+
+    def test_unknown_rows_are_left_out(self):
+        reqs = [_req("a", "core", "met"), _req("b", "nice", "missing"), _req("c", "core", "maybe")]
+        assert fit_score_from(reqs) == 100
+
+    def test_case_and_whitespace_are_tolerated(self):
+        assert fit_score_from([_req("a", " Core ", "MISSING"), _req("b", "core", "met")]) == 50
+
+    def test_nothing_usable_is_zero(self):
+        assert fit_score_from([]) == 0
+        assert fit_score_from("not a list") == 0
+        assert fit_score_from(["not a row", _req("a", "core", "met")]) == 100
+
+
+class TestScoreFit:
+    @patch("src.ai_engine._client")
+    def test_model_score_is_ignored(self, mock_client):
+        reply = {
+            "score": 99,
+            "requirements": [_req("a", "core", "met"), _req("b", "core", "missing")],
+        }
+        _create(mock_client).return_value = _mock_response(json.dumps(reply))
+        assert score_fit("Job", RESUME)["score"] == 50
+
+    @patch("src.ai_engine._client")
+    def test_every_gap_listed_core_first(self, mock_client):
+        reqs = [_req(f"pref{i}", "preferred", "missing") for i in range(4)]
+        reqs += [_req("graph", "core", "missing"), _req("lake", "required", "partial")]
+        reqs += [_req(f"core{i}", "core", "partial") for i in range(2)] + [
+            _req("ok", "core", "met")
+        ]
+        _create(mock_client).return_value = _mock_response(json.dumps({"requirements": reqs}))
+        gaps = score_fit("Job", RESUME)["gaps"]
+        assert len(gaps) == 8
+        assert [g.split("]")[0] for g in gaps[:3]] == [
+            "[core, missing",
+            "[core, partial",
+            "[core, partial",
+        ]
+        assert gaps[3].startswith("[required, partial] lake")
+        assert all(g.startswith("[preferred") for g in gaps[4:])
+        assert not any("ok" in g for g in gaps)
+
+    @patch("src.ai_engine._client")
+    def test_no_requirements_is_an_error(self, mock_client):
+        _create(mock_client).return_value = _mock_response(json.dumps({"score": 75}))
+        assert "error" in score_fit("Job", "Resume")
+
+    @patch("src.ai_engine._client")
+    def test_unparseable_reply_is_an_error(self, mock_client):
+        _create(mock_client).return_value = _mock_response("not json")
+        assert "error" in score_fit("Job", "Resume")
+
+    @patch("src.ai_engine._client")
+    def test_prompt_asks_for_every_requirement_weighted(self, mock_client):
+        _create(mock_client).return_value = _mock_response(
+            json.dumps({"requirements": [_req("a", "core", "met")]})
+        )
+        score_fit("THE JOB", "THE RESUME")
+        kwargs = _create(mock_client).call_args.kwargs
+        prompt = kwargs["messages"][0]["content"]
+        for word in ("core", "required", "preferred", "met", "partial", "missing", "impression"):
+            assert word in prompt
+        assert "word for word" in prompt
+        assert "Do not give a numeric score" in prompt
+        assert "max 5" not in prompt.split('"explanation"')[0]
+        assert "THE JOB" not in kwargs["system"] and "THE RESUME" not in kwargs["system"]
 
 
 @patch("src.ai_engine._client")
@@ -137,3 +222,38 @@ def test_generators_forbid_invented_facts(mock_client, generate):
     kwargs = _create(mock_client).call_args.kwargs
     assert ai_engine.TRUTHFULNESS_RULE in kwargs["system"]
     assert "Pat Example" in kwargs["messages"][0]["content"]
+
+
+class TestVerifyEvidence:
+    RESUME = "Built data pipelines in Python.\nLed a team of 4 engineers (2021-2024)."
+
+    def _check(self, status: str, evidence: str) -> dict[str, object]:
+        (row,) = ai_engine.verify_evidence([_req("x", "core", status, evidence)], self.RESUME)
+        return row
+
+    def test_quote_found_keeps_status(self):
+        row = self._check("met", "built data pipelines in python")
+        assert row["status"] == "met" and row["evidence_found"] is True
+
+    def test_spacing_case_and_punctuation_are_ignored(self):
+        row = self._check("met", "  Led a team of 4 engineers  (2021-2024) ")
+        assert row["status"] == "met"
+
+    def test_invented_quote_is_lowered_one_step(self):
+        assert self._check("met", "Managed a $5M budget")["status"] == "partial"
+        assert self._check("partial", "Kubernetes in production")["status"] == "missing"
+
+    def test_empty_evidence_cannot_earn_full_credit(self):
+        row = self._check("met", "")
+        assert row["status"] == "partial" and row["evidence_found"] is False
+
+    def test_missing_rows_are_untouched(self):
+        assert self._check("missing", "")["status"] == "missing"
+
+    @patch("src.ai_engine._client")
+    def test_invented_evidence_lowers_the_score(self, mock_client):
+        reply = {"requirements": [_req("Go", "core", "met", "Wrote Go services")]}
+        _create(mock_client).return_value = _mock_response(json.dumps(reply))
+        result = score_fit("Job", self.RESUME)
+        assert result["score"] == 50
+        assert result["gaps"] == ["[core, partial] Go"]

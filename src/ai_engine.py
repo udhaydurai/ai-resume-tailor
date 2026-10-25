@@ -164,20 +164,93 @@ Job Description:
 # ---------------------------------------------------------------------------
 
 
+FIT_WEIGHTS = {"core": 3, "required": 2, "preferred": 1}
+FIT_CREDIT = {"met": 1.0, "partial": 0.5, "missing": 0.0}
+
+
+def _tier(row: dict[str, Any], key: str, allowed: dict[str, Any]) -> str | None:
+    value = str(row.get(key, "")).strip().lower()
+    return value if value in allowed else None
+
+
+def _usable(requirements: Any) -> list[dict[str, Any]]:
+    """Rows with a known weight and status; everything else is left out."""
+    if not isinstance(requirements, list):
+        return []
+    rows = []
+    for row in requirements:
+        if not isinstance(row, dict):
+            continue
+        weight, status = _tier(row, "weight", FIT_WEIGHTS), _tier(row, "status", FIT_CREDIT)
+        if weight and status:
+            rows.append({**row, "weight": weight, "status": status})
+    return rows
+
+
+DOWNGRADE = {"met": "partial", "partial": "missing", "missing": "missing"}
+
+
+def _normalise(text: str) -> str:
+    return " ".join(re.sub(r"[^\w%+#./-]+", " ", text.lower()).split())
+
+
+def verify_evidence(rows: list[dict[str, Any]], resume_text: str) -> list[dict[str, Any]]:
+    """A requirement only earns credit for evidence that is really in the resume.
+
+    Met or partial rows whose quote is empty or not found are lowered one step and
+    marked, so an invented quote can't raise the score.
+    """
+    resume = _normalise(resume_text)
+    checked = []
+    for row in rows:
+        quote = _normalise(str(row.get("evidence", "")))
+        found = bool(quote) and quote in resume
+        if row["status"] != "missing" and not found:
+            row = {**row, "status": DOWNGRADE[row["status"]], "evidence_found": False}
+        else:
+            row = {**row, "evidence_found": found}
+        checked.append(row)
+    return checked
+
+
+def fit_score_from(requirements: Any) -> int:
+    """Score 0-100 from weighted requirements.
+
+    The model only classifies each requirement and the arithmetic here is fixed, so the
+    score moves only when the classification does. That is far steadier than a number
+    the model picks, but a borderline requirement can still flip between runs.
+    """
+    rows = _usable(requirements)
+    possible = sum(FIT_WEIGHTS[r["weight"]] for r in rows)
+    if not possible:
+        return 0
+    earned = sum(FIT_WEIGHTS[r["weight"]] * FIT_CREDIT[r["status"]] for r in rows)
+    return int(earned * 100 / possible + 0.5)
+
+
 def score_fit(job_description: str, resume_text: str) -> dict[str, Any]:
     """Score how well a resume matches a job description (0-100).
 
-    Returns a dict with keys: score, explanation, strengths,
-    gaps, and suggestions.
+    The model lists every requirement with a weight, status and evidence; the score and
+    the gap list are derived here. Returns score, explanation, impression, strengths,
+    gaps, suggestions and requirements.
     """
     system = (
         "You are a career advisor and ATS expert. Respond ONLY with valid JSON, no markdown fences."
     )
     prompt = f"""Compare the resume against the job description and return JSON with:
-- "score": integer 0-100 representing alignment
-- "explanation": 2-3 sentences explaining the score
+- "requirements": EVERY requirement in the job description, with no limit on how many. \
+Split compound items into separate requirements. Each item is an object with:
+  - "requirement": short name of the requirement
+  - "weight": "core" (the role is defined by it), "required", or "preferred"
+  - "status": "met", "partial", or "missing", judged only from what the resume shows
+  - "evidence": a phrase copied word for word from the resume that supports it, \
+or "" if missing
+- "explanation": 2-3 sentences explaining the overall fit. Do not give a numeric score \
+or percentage; the app computes the score from the requirements
+- "impression": 2-3 sentences on how a hiring manager for this role would read the \
+resume as a whole: what kind of candidate it makes the person look like
 - "strengths": list of matching strengths (list of strings, max 5)
-- "gaps": list of gaps or missing qualifications (list of strings, max 5)
 - "suggestions": list of actionable suggestions to improve fit (list of strings, max 5)
 
 Job Description:
@@ -186,8 +259,25 @@ Job Description:
 Resume:
 {resume_text}"""
 
-    text = _call_model(system, prompt)
-    return _parse_json(text)
+    result = _parse_json(_call_model(system, prompt))
+    if "error" in result:
+        return result
+    rows = verify_evidence(_usable(result.get("requirements")), resume_text)
+    if not rows:
+        return {"error": "Couldn't read the requirements from the reply. Please try again."}
+    order = list(FIT_WEIGHTS)
+    gaps = sorted(
+        (r for r in rows if r["status"] != "met"),
+        key=lambda r: (order.index(r["weight"]), r["status"] != "missing"),
+    )
+    return {
+        **result,
+        "requirements": rows,
+        "score": fit_score_from(rows),
+        "gaps": [
+            f"[{r['weight']}, {r['status']}] {r.get('requirement', '')}".rstrip() for r in gaps
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------

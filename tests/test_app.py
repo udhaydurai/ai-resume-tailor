@@ -20,7 +20,16 @@ REPLIES = {
         {"title": "Backend Engineer", "company": "Acme", "skills": ["Python"], "keywords": []}
     ),
     "Compare the resume": json.dumps(
-        {"score": 72, "explanation": "Good.", "strengths": [], "gaps": [], "suggestions": []}
+        {
+            "explanation": "Good.",
+            "impression": "Reads as a backend platform engineer.",
+            "strengths": [],
+            "suggestions": [],
+            "requirements": [
+                {"requirement": "Python", "weight": "core", "status": "met", "evidence": "Python"},
+                {"requirement": "Go", "weight": "preferred", "status": "missing", "evidence": ""},
+            ],
+        }
     ),
     "Identify ATS keywords": json.dumps(
         {"matched": ["Python"], "missing": ["Go"], "match_percentage": 50}
@@ -61,6 +70,9 @@ def test_full_flow_with_mocked_claude(app):
         click(app, key)
     markdown = " ".join(m.value for m in app.markdown)
     assert "Alignment Score" in markdown and "Keyword Match" in markdown
+    assert "75/100" in markdown and "Reads as a backend platform engineer." in markdown
+    assert "[preferred, missing] Go" in markdown
+    assert app.dataframe, "requirements table is shown"
     warnings = " ".join(w.value for w in app.warning)
     assert "900%" in warnings
     assert app.session_state["tailored_resume"].startswith("JOHN DOE")

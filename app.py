@@ -242,6 +242,8 @@ with tab_analysis:
                     color = "green" if score >= 70 else "orange" if score >= 40 else "red"
                     st.markdown(f"### Alignment Score: :{color}[{score}/100]")
                     st.write(fs.get("explanation", ""))
+                    if fs.get("impression"):
+                        st.markdown(f"**How it reads to a hiring manager:** {fs['impression']}")
 
                     col1, col2 = st.columns(2)
                     with col1:
@@ -256,6 +258,26 @@ with tab_analysis:
                     st.markdown("**💡 Suggestions:**")
                     for s in fs.get("suggestions", []):
                         st.markdown(f"- {s}")
+
+                    with st.expander(
+                        "Every requirement, weighted (core 3, required 2, preferred 1)"
+                    ):
+                        st.dataframe(
+                            [
+                                {
+                                    "Requirement": r.get("requirement", ""),
+                                    "Weight": r["weight"],
+                                    "Status": r["status"],
+                                    "Evidence": r.get("evidence", "")
+                                    if r.get("evidence_found")
+                                    else "(not found in resume)"
+                                    if r.get("evidence")
+                                    else "",
+                                }
+                                for r in fs.get("requirements", [])
+                            ],
+                            hide_index=True,
+                        )
 
             st.divider()
 
