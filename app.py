@@ -1,6 +1,5 @@
 """AI Resume Tailor — Streamlit application."""
 
-import os
 from collections.abc import Callable
 from datetime import date
 from typing import Any
@@ -18,6 +17,7 @@ from src.ai_engine import (  # noqa: E402
     generate_tailored_resume,
     keyword_match_report,
     score_fit,
+    setup_problem,
 )
 from src.cover_letter import generate_cover_letter_docx  # noqa: E402
 from src.job_tracker import (  # noqa: E402
@@ -36,7 +36,7 @@ from src.utils import fetch_job_description  # noqa: E402
 
 
 def run_ai(fn: Callable[..., Any], *args: Any) -> Any:
-    """Call Claude and show a plain error instead of a stack trace."""
+    """Call the model and show a plain error instead of a stack trace."""
     try:
         return fn(*args)
     except AIError as exc:
@@ -53,7 +53,7 @@ def run_ai(fn: Callable[..., Any], *args: Any) -> Any:
 
 
 def warn_unsupported(original: str, generated: str, profile: dict[str, str]) -> None:
-    """Point out numbers Claude may have invented, before the user sends anything."""
+    """Point out numbers the model may have invented, before the user sends anything."""
     today = date.today().strftime("%B %d %Y %m/%d/%Y")
     known = " ".join([original, today, *profile.values()])
     invented = unsupported_numbers(known, generated)
@@ -100,12 +100,12 @@ st.sidebar.caption("Built with Claude API & Streamlit")
 # ---------------------------------------------------------------------------
 
 st.title("📄 AI Resume Tailor")
-if not os.environ.get("ANTHROPIC_API_KEY"):
-    st.warning(
-        "No ANTHROPIC_API_KEY found. Copy .env.example to .env and add your key, "
-        "then restart the app. Analysis and generation will not work until then."
-    )
-st.caption("Tailor your resume and cover letter for any job — powered by Claude AI")
+problem = setup_problem()
+if problem:
+    st.warning(problem + " Analysis and generation will not work until then.")
+st.caption(
+    "Tailor your resume and cover letter for any job. Built and tested with Claude; other models can be configured."
+)
 
 tab_input, tab_analysis, tab_resume, tab_cover, tab_tracker = st.tabs(
     ["📝 Input", "🔍 Analysis", "📄 Tailored Resume", "✉️ Cover Letter", "📊 Job Tracker"]
@@ -193,7 +193,7 @@ with tab_analysis:
     else:
         # --- Job Description Analysis ---
         if st.button("Analyze Job Description", key="btn_analyze_jd"):
-            with st.spinner("Analyzing job description with Claude..."):
+            with st.spinner("Analyzing job description..."):
                 analysis = run_ai(analyze_job_description, jd)
                 if analysis is not None:
                     st.session_state["jd_analysis"] = analysis
@@ -230,7 +230,7 @@ with tab_analysis:
             st.info("Upload a resume in the Input tab to enable fit scoring.")
         else:
             if st.button("Score Resume Fit", key="btn_score"):
-                with st.spinner("Scoring alignment with Claude..."):
+                with st.spinner("Scoring alignment..."):
                     result = run_ai(score_fit, jd, rt)
                     if result is not None:
                         st.session_state["fit_score"] = result
@@ -300,7 +300,7 @@ with tab_resume:
         if st.button("Generate Tailored Resume", key="btn_gen_resume"):
             if not user_name:
                 st.warning("Fill in your profile in the sidebar for best results.")
-            with st.spinner("Generating tailored resume with Claude... this may take a moment."):
+            with st.spinner("Generating tailored resume... this may take a moment."):
                 tailored = run_ai(generate_tailored_resume, jd, rt, user_profile)
                 if tailored is not None:
                     st.session_state["tailored_resume"] = tailored
@@ -348,7 +348,7 @@ with tab_cover:
         if st.button("Generate Cover Letter", key="btn_gen_cover"):
             if not user_name:
                 st.warning("Fill in your profile in the sidebar for best results.")
-            with st.spinner("Generating cover letter with Claude..."):
+            with st.spinner("Generating cover letter..."):
                 cl = run_ai(generate_cover_letter, jd, rt, user_profile)
                 if cl is not None:
                     st.session_state["cover_letter"] = cl

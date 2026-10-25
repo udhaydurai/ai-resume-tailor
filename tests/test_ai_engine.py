@@ -84,7 +84,7 @@ def test_request_uses_current_model_effort_and_fallbacks(mock_client, monkeypatc
     monkeypatch.delenv("RESUME_TAILOR_MODEL", raising=False)
     monkeypatch.delenv("RESUME_TAILOR_EFFORT", raising=False)
     _create(mock_client).return_value = _mock_response("ok")
-    ai_engine._call_claude("sys", "user")
+    ai_engine._call_model("sys", "user")
     kwargs = _create(mock_client).call_args.kwargs
     assert kwargs["model"] == "claude-opus-5-5"
     assert kwargs["output_config"] == {"effort": "medium"}
@@ -98,7 +98,7 @@ def test_model_and_effort_come_from_env(mock_client, monkeypatch):
     monkeypatch.setenv("RESUME_TAILOR_MODEL", "claude-sonnet-5-5")
     monkeypatch.setenv("RESUME_TAILOR_EFFORT", "low")
     _create(mock_client).return_value = _mock_response("ok")
-    ai_engine._call_claude("sys", "user")
+    ai_engine._call_model("sys", "user")
     kwargs = _create(mock_client).call_args.kwargs
     assert kwargs["model"] == "claude-sonnet-5-5"
     assert kwargs["output_config"] == {"effort": "low"}
@@ -112,21 +112,21 @@ def test_unknown_effort_falls_back_to_default(monkeypatch):
 @patch("src.ai_engine._client")
 def test_thinking_blocks_are_skipped(mock_client):
     _create(mock_client).return_value = _mock_response("the answer")
-    assert ai_engine._call_claude("sys", "user") == "the answer"
+    assert ai_engine._call_model("sys", "user") == "the answer"
 
 
 @patch("src.ai_engine._client")
 def test_refusal_raises_plain_error(mock_client):
     _create(mock_client).return_value = _mock_response("", stop_reason="refusal")
     with pytest.raises(AIError, match="declined"):
-        ai_engine._call_claude("sys", "user")
+        ai_engine._call_model("sys", "user")
 
 
 @patch("src.ai_engine._client")
 def test_empty_reply_raises(mock_client):
     _create(mock_client).return_value = _mock_response("   ")
     with pytest.raises(AIError, match="empty"):
-        ai_engine._call_claude("sys", "user")
+        ai_engine._call_model("sys", "user")
 
 
 @pytest.mark.parametrize("generate", [generate_tailored_resume, generate_cover_letter])

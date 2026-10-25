@@ -5,7 +5,7 @@ description: Measure invented facts in generated resumes and cover letters befor
 
 # Eval prompts
 
-The eval runs the real generators on synthetic resume and job pairs in `evals/cases.json` and counts invented facts: numbers that aren't in the source resume, and skills the job wants that the resume lacks. It costs real money (a few cents per run on the default model), so tell the human the cost and get a yes first.
+The eval runs the real generators on synthetic resume and job pairs in `evals/cases.json` and counts invented facts: numbers that aren't in the source resume, and skills the job wants that the resume lacks. It costs real money (a few cents per run on the default model), so tell the human the cost and get a yes first. Baselines are on Claude, the tested provider. `RESUME_TAILOR_PROVIDER=openai` runs it on another model for a one-off comparison, but those results are not a gate.
 
 1. **Baseline.** On `master` (or before your change): `make eval`. Save the table.
 2. **Change.** Make the prompt or setting change.
