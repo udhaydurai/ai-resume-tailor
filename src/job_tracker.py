@@ -7,6 +7,7 @@ import io
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 DB_PATH = Path(__file__).resolve().parent.parent / "job_tracker.db"
 
@@ -66,6 +67,7 @@ def add_application(
     conn.commit()
     row_id = cur.lastrowid
     conn.close()
+    assert row_id is not None
     return row_id
 
 
@@ -80,7 +82,7 @@ def update_status(app_id: int, status: str) -> None:
     conn.close()
 
 
-def update_application(app_id: int, **fields) -> None:
+def update_application(app_id: int, **fields: str) -> None:
     """Update arbitrary fields on an application."""
     allowed = {"company", "title", "status", "url", "notes", "applied_date"}
     updates = {k: v for k, v in fields.items() if k in allowed}
@@ -88,9 +90,10 @@ def update_application(app_id: int, **fields) -> None:
         return
     updates["updated_at"] = _now()
     set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [app_id]
+    values: list[Any] = [*updates.values(), app_id]
     conn = _connect()
-    conn.execute(f"UPDATE applications SET {set_clause} WHERE id = ?", values)
+    sql = f"UPDATE applications SET {set_clause} WHERE id = ?"  # noqa: S608  column names come from `allowed`
+    conn.execute(sql, values)
     conn.commit()
     conn.close()
 
@@ -103,12 +106,10 @@ def delete_application(app_id: int) -> None:
     conn.close()
 
 
-def get_all_applications() -> list[dict]:
+def get_all_applications() -> list[dict[str, Any]]:
     """Return all applications ordered by most recently updated."""
     conn = _connect()
-    rows = conn.execute(
-        "SELECT * FROM applications ORDER BY updated_at DESC"
-    ).fetchall()
+    rows = conn.execute("SELECT * FROM applications ORDER BY updated_at DESC").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

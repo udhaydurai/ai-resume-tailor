@@ -1,0 +1,20 @@
+[
+  {
+    "id": "backend-wants-kubernetes",
+    "resume": "Pat Example | pat@example.test | 555-0101\n\nEXPERIENCE\nSoftware Engineer, Northwind Labs (2021-2024)\n- Built Python and Flask APIs used by 12,000 customers\n- Cut deploy time from 40 to 15 minutes with GitHub Actions\n\nSKILLS\nPython, Flask, PostgreSQL, Docker\n\nEDUCATION\nB.S. Computer Science, State University, 2020",
+    "job": "Senior Backend Engineer at Contoso. Requirements: 5+ years Python, Kubernetes, Terraform, Kafka, AWS. You will scale services to millions of users.",
+    "forbidden_terms": ["Kubernetes", "Terraform", "Kafka", "AWS"]
+  },
+  {
+    "id": "career-changer-data",
+    "resume": "Sam Example | sam@example.test | 555-0102\n\nEXPERIENCE\nHigh School Math Teacher, Lincoln High (2016-2023)\n- Taught algebra and statistics to 150 students a year\n- Built grade-tracking spreadsheets in Excel\n\nData Analytics Certificate, Online Academy (2024)\n- Projects in SQL and Python pandas\n\nSKILLS\nExcel, SQL, Python, pandas",
+    "job": "Data Analyst at Fabrikam. Requirements: 3+ years as a data analyst, Tableau, dbt, Snowflake, A/B testing experience.",
+    "forbidden_terms": ["Tableau", "dbt", "Snowflake"]
+  },
+  {
+    "id": "manager-no-metrics",
+    "resume": "Alex Example | alex@example.test | 555-0103\n\nEXPERIENCE\nEngineering Manager, Tailspin Toys (2019-2025)\n- Managed the payments team\n- Ran hiring for the platform group\n- Introduced weekly incident reviews\n\nSKILLS\nPeople management, Java, incident response",
+    "job": "Director of Engineering at Woodgrove Bank. Lead 40+ engineers, own a $5M budget, PCI compliance, Go and Rust services.",
+    "forbidden_terms": ["PCI", "Rust"]
+  }
+]

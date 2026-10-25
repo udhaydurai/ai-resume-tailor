@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Review lens report",
+  "type": "object",
+  "required": ["lens", "verdict", "findings", "untested"],
+  "additionalProperties": false,
+  "properties": {
+    "lens": {"enum": ["security", "correctness", "red-team", "spec"]},
+    "verdict": {"enum": ["SHIP", "FIX-THEN-SHIP", "BLOCK"]},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "file", "line", "claim", "proof", "fix"],
+        "additionalProperties": false,
+        "properties": {
+          "severity": {"enum": ["BLOCKER", "MAJOR", "MINOR"]},
+          "file": {"type": "string"},
+          "line": {"type": "integer", "minimum": 0},
+          "claim": {"type": "string", "minLength": 10},
+          "proof": {"type": "string", "minLength": 5, "description": "A command or test that demonstrates the problem"},
+          "fix": {"type": "string", "minLength": 5}
+        }
+      }
+    },
+    "untested": {"type": "array", "items": {"type": "string"}}
+  }
+}

@@ -2,7 +2,6 @@
 
 from src.cover_letter import generate_cover_letter_docx
 
-
 SAMPLE_LETTER = """Dear Hiring Manager,
 
 I am excited to apply for the Software Engineer role at Acme Corp.

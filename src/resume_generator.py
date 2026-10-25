@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import io
+from typing import Any
+from xml.sax.saxutils import escape
 
 from docx import Document
-from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches, Pt
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 
 def generate_docx(resume_text: str) -> bytes:
@@ -84,39 +86,47 @@ def generate_pdf(resume_text: str) -> bytes:
     )
 
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(
-        "ResumeHeader",
-        parent=styles["Title"],
-        fontSize=14,
-        alignment=1,  # center
-        spaceAfter=6,
-    ))
-    styles.add(ParagraphStyle(
-        "SectionHeader",
-        parent=styles["Heading2"],
-        fontSize=12,
-        spaceBefore=10,
-        spaceAfter=4,
-        textColor="black",
-    ))
-    styles.add(ParagraphStyle(
-        "ResumeBody",
-        parent=styles["Normal"],
-        fontSize=10.5,
-        leading=13,
-        spaceAfter=2,
-    ))
-    styles.add(ParagraphStyle(
-        "ResumeBullet",
-        parent=styles["Normal"],
-        fontSize=10.5,
-        leading=13,
-        leftIndent=18,
-        spaceAfter=2,
-        bulletIndent=6,
-    ))
+    styles.add(
+        ParagraphStyle(
+            "ResumeHeader",
+            parent=styles["Title"],
+            fontSize=14,
+            alignment=1,  # center
+            spaceAfter=6,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            "SectionHeader",
+            parent=styles["Heading2"],
+            fontSize=12,
+            spaceBefore=10,
+            spaceAfter=4,
+            textColor="black",
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            "ResumeBody",
+            parent=styles["Normal"],
+            fontSize=10.5,
+            leading=13,
+            spaceAfter=2,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            "ResumeBullet",
+            parent=styles["Normal"],
+            fontSize=10.5,
+            leading=13,
+            leftIndent=18,
+            spaceAfter=2,
+            bulletIndent=6,
+        )
+    )
 
-    story: list = []
+    story: list[Any] = []
     lines = resume_text.strip().split("\n")
 
     for i, line in enumerate(lines):
@@ -126,14 +136,14 @@ def generate_pdf(resume_text: str) -> bytes:
             continue
 
         if stripped.isupper() and len(stripped) > 2:
-            story.append(Paragraph(stripped, styles["SectionHeader"]))
+            story.append(Paragraph(escape(stripped), styles["SectionHeader"]))
         elif i == 0:
-            story.append(Paragraph(stripped, styles["ResumeHeader"]))
+            story.append(Paragraph(escape(stripped), styles["ResumeHeader"]))
         elif stripped.startswith(("- ", "• ", "* ")):
-            text = f"&bull; {stripped[2:]}"
+            text = f"&bull; {escape(stripped[2:])}"
             story.append(Paragraph(text, styles["ResumeBullet"]))
         else:
-            story.append(Paragraph(stripped, styles["ResumeBody"]))
+            story.append(Paragraph(escape(stripped), styles["ResumeBody"]))
 
     doc.build(story)
     return buf.getvalue()

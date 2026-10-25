@@ -1,5 +1,5 @@
 John Doe
-john.doe@email.com | (555) 123-4567 | linkedin.com/in/johndoe | San Francisco, CA
+john.doe@example.com | 555-0100 | linkedin.com/in/johndoe | San Francisco, CA
 
 PROFESSIONAL SUMMARY
 Software engineer with 5 years of experience building web applications and cloud services. Proficient in Python, JavaScript, and AWS. Passionate about building scalable systems and improving developer productivity.
